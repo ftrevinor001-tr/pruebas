@@ -1,0 +1,38 @@
+name: 🔄 Actualizar datos del dashboard
+
+on:
+  push:
+    paths:
+      - '*.xlsx'           # cualquier Excel en la raíz
+      - 'data/*.xlsx'      # o en la carpeta data/
+  workflow_dispatch:       # lanzar manualmente desde GitHub
+
+jobs:
+  convert:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write                 # necesario para hacer commit del JSON
+
+    steps:
+      - name: ⬇️ Checkout repositorio
+        uses: actions/checkout@v4
+
+      - name: 🐍 Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 📦 Instalar dependencias
+        run: pip install pandas openpyxl
+
+      - name: ⚙️ Convertir Excel → JSON
+        run: python convert_to_json.py
+
+      - name: 💾 Commit y push del JSON generado
+        run: |
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add data/data.json
+          git diff --staged --quiet && echo "Sin cambios en el JSON" || \
+          git commit -m "🔄 Auto-actualización de data.json [skip ci]"
+          git push
