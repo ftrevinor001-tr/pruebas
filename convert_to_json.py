@@ -15,6 +15,16 @@ from datetime import datetime
 JSON_PATH = os.path.join("data", "data.json")
 
 
+def es_excel_valido(ruta):
+    """Verifica que el archivo sea un Excel válido antes de usarlo."""
+    try:
+        pd.ExcelFile(ruta, engine='openpyxl')
+        return True
+    except Exception as e:
+        print(f"   ⚠ Archivo inválido ({ruta}): {e}")
+        return False
+
+
 def encontrar_excel():
     print("\n📁 Archivos en el directorio actual:")
     for f in sorted(os.listdir(".")):
@@ -26,27 +36,32 @@ def encontrar_excel():
         for f in sorted(os.listdir(carpeta_data)):
             print(f"   {f}")
 
-    # 1. Buscar por nombre exacto en raíz y data/
-    nombres_exactos = ["Estatus_de_BO.xlsx", "Estatus_BO.xlsx",
-                       "estatus_de_bo.xlsx", "estatus_bo.xlsx"]
-    carpetas = [".", carpeta_data]
+    # 1. Buscar por nombres conocidos (más específicos primero)
+    nombres_exactos = [
+        "Estatus de BO.xlsx", "Estatus_de_BO.xlsx",
+        "Estatus BO.xlsx",    "Estatus_BO.xlsx",
+        "estatus de bo.xlsx", "estatus_de_bo.xlsx",
+        "estatus bo.xlsx",    "estatus_bo.xlsx",
+    ]
+    carpetas = [carpeta_data, "."]   # buscar primero en data/
     for carpeta in carpetas:
         for nombre in nombres_exactos:
-            ruta = os.path.join(carpeta, nombre) if carpeta != "." else nombre
-            if os.path.exists(ruta):
+            ruta = os.path.join(carpeta, nombre)
+            if os.path.exists(ruta) and es_excel_valido(ruta):
                 print(f"\n✅ Excel encontrado: {ruta}")
                 return ruta
 
-    # 2. Buscar cualquier .xlsx en raíz y data/
+    # 2. Buscar cualquier .xlsx válido en data/ y raíz
     for carpeta in carpetas:
-        if not os.path.isdir(carpeta) and carpeta != ".":
-            continue
-        base = "." if carpeta == "." else carpeta
-        for f in os.listdir(base):
+        base = carpeta if os.path.isdir(carpeta) else "."
+        for f in sorted(os.listdir(base)):
             if f.lower().endswith(".xlsx"):
-                ruta = os.path.join(base, f) if base != "." else f
-                print(f"\n✅ Excel encontrado (búsqueda amplia): {ruta}")
-                return ruta
+                ruta = os.path.join(base, f)
+                if es_excel_valido(ruta):
+                    print(f"\n✅ Excel encontrado (búsqueda amplia): {ruta}")
+                    return ruta
+                else:
+                    print(f"   ⏭ Saltando archivo inválido: {ruta}")
 
     raise FileNotFoundError(
         "No se encontró ningún archivo .xlsx en el repositorio.\n"
@@ -82,18 +97,21 @@ def safe_num(val):
 
 def main():
     EXCEL_PATH = encontrar_excel()
+    if not EXCEL_PATH:
+        raise FileNotFoundError("No se encontró ningún archivo Excel válido en el repositorio.")
+
     print(f"📂 Leyendo: {EXCEL_PATH}")
-    xl = pd.ExcelFile(EXCEL_PATH)
+    xl = pd.ExcelFile(EXCEL_PATH, engine='openpyxl')
     print(f"   Hojas encontradas: {xl.sheet_names}")
 
     # ── Hoja 1 (índice 1): " Ordenes de Compra" → ÓRDENES ──────────────────
-    df1 = pd.read_excel(EXCEL_PATH, sheet_name=1, dtype=str)
+    df1 = pd.read_excel(EXCEL_PATH, sheet_name=1, dtype=str, engine='openpyxl')
     df1 = df1.fillna("")
 
     # ── Hoja 3 (índice 3): "RP01-23 Ordenes de Compra" → Estado OC por folio
     estado_oc_map = {}
     try:
-        df_rp = pd.read_excel(EXCEL_PATH, sheet_name=3, dtype=str).fillna("")
+        df_rp = pd.read_excel(EXCEL_PATH, sheet_name=3, dtype=str, engine='openpyxl').fillna("")
         if 'Estado OC' in df_rp.columns and 'Folio' in df_rp.columns:
             for _, r in df_rp.iterrows():
                 folio = safe_str(r.get('Folio', ''))
@@ -131,7 +149,7 @@ def main():
     print(f"   ✅ Órdenes procesadas: {len(orders)}")
 
     # ── Hoja 0 (índice 0): "Productos Incluidos en" → PRODUCTOS ────────────
-    df2 = pd.read_excel(EXCEL_PATH, sheet_name=0, dtype=str)
+    df2 = pd.read_excel(EXCEL_PATH, sheet_name=0, dtype=str, engine='openpyxl')
     df2 = df2.fillna("")
 
     products = {}
